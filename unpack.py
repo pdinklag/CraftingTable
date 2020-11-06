@@ -100,7 +100,8 @@ for filename in changedClasses:
     
     # build a filename pattern that will include all potential inner classes of the class
     classpattern = classfilename[:-6] + '*.class' # replace .class by *.class
-    p = subprocess.run(args=['java', '-jar', setup.fernflower_jar, '-rsy=1', classpattern, srcdir], capture_output=True)
+    cmdline = 'java -jar ' + setup.fernflower_jar + ' -rsy=1 ' + classpattern + ' ' + srcdir
+    p = subprocess.run(args=[cmdline], shell=True, capture_output=True)
     
     if p.returncode == 0:
         print('\t(' + str(num) + '/' + totalStr + ') ' + classfilename, flush=True)
