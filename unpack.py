@@ -14,53 +14,81 @@ import setup
 
 # command line arguments
 parser = argparse.ArgumentParser(description='CraftingTable Unpacker')
+parser.add_argument('server', help='the original server jar')
+parser.add_argument('mapping', help='the corresponding obfuscation map')
 parser.add_argument('output', help='the output directory')
+parser.add_argument('--verbose', action='store_true', help='verbose error messages')
 args = parser.parse_args()
 
-# constants
-jarCommentFilename = args.output + '/jar_comment'
-hashesFilename = args.output + '/class_hashes'
+# checks
+if not os.path.isfile(args.server):
+    print('server JAR not found: ' + args.server)
 
-classesOutput = args.output + '/classes'
+if not os.path.isfile(args.mapping):
+    print('obfuscation map not found: ' + args.mapping)
+
+# load previous data
+dataFilename = args.output + '/' + args.server[:-3] + 'data.json'
+
+if os.path.isfile(dataFilename):
+    with open(dataFilename, 'r') as f:
+        data = json.load(f)
+else:
+    data = dict()
+    data['classes'] = dict()
+    data['sources'] = dict()
+    data['serverHash'] = ''
+    data['jarComment'] = ''
+
+# write data function
+def writeData():
+    global data, dataFilename
+    
+    print('writing data to ' + dataFilename + ' ...', flush=True)
+    with open(dataFilename, 'w') as f:
+        json.dump(data, f)
+
+# compute server hash
+with open(args.server, 'rb') as f:
+    serverHash = hashlib.sha1(f.read()).hexdigest()
+
+# remap
+remapFilename = args.output + '/' + args.server[:-3] + 'remap.jar'
+if serverHash != data['serverHash']:
+    print('Remapping ...', flush=True)
+    p = subprocess.run(args=[setup.mcremapper_bin, args.server, args.mapping, '--output', remapFilename, '--fixlocalvar', 'rename', '--autotoken'])
+    
+    if not p.returncode == 0:
+        exit(1)
+        
+    data['serverHash'] = serverHash
+    writeData()
+
+# extract classes
 javaOutput = args.output + '/src'
+
+def getMainClassFilePath(classfilename):
+    dollar = classfilename.find('$')
+    if dollar >= 0:
+        return classfilename[0:dollar] + '.class'
+    else:
+        return classfilename
+
+def getSourceFilePath(classfilename):
+    return classfilename[:-5] + 'java'
+
+classes = data['classes']
+extractClasses = set()
 
 extractPrefix = 'net/minecraft'
 extractSuffix = '.class'
 
-# download latest snapshot
-print('Checking for latest snapshot ...', flush=True)
-p = subprocess.run(args=[setup.mcdlsnapshot_bin, '-s', '-m', '--print-always'], capture_output=True, cwd=args.output)
+classesOutput = args.output + '/classes'
 
-if not p.returncode == 0:
-    print(p.stderr.decode())
-    exit(1)
-
-serverJar = args.output + '/' + p.stdout.decode().strip()
-serverMapping = serverJar[:-3] + 'mapping.txt'
-
-# remap
-print('Remapping ...', flush=True)
-serverRemapJar = serverJar[:-3] + 'remap.jar'
-
-if not os.path.isfile(serverRemapJar):
-    p = subprocess.run(args=[setup.mcremapper_bin, '--input', serverJar, '--mapping', 'file://' + os.path.abspath(serverMapping), '--output', serverRemapJar])
-    
-    if not p.returncode == 0:
-        exit(1)
-
-# load previous hashes
-if os.path.isfile(hashesFilename):
-    with open(hashesFilename, 'r') as f:
-        classes = json.load(f);
-else:
-    classes = dict()
-
-changedClasses = []
-
-print('processing server JAR ...', flush=True)
-with ZipFile(serverRemapJar, 'r') as jar:
-    with open(jarCommentFilename, 'wb') as f:
-        f.write(jar.comment)
+print('extracting ...', flush=True)
+# TODO: also check for classes that may have been removed
+with ZipFile(remapFilename, 'r') as jar:
+    data['jarComment'] = jar.comment.decode('utf-8')
 
     for item in jar.infolist():
         if item.filename.startswith(extractPrefix) and item.filename.endswith(extractSuffix):
@@ -70,23 +98,31 @@ with ZipFile(serverRemapJar, 'r') as jar:
             classdata = jar.read(item.filename)
             sha1 = hashlib.sha1(classdata).hexdigest()
             
-            if not item.filename in classes or sha1 != classes[item.filename]:
+            mainClass = getMainClassFilePath(item.filename)
+            srcFile = javaOutput + '/' + getSourceFilePath(mainClass)
+            if not item.filename in classes or sha1 != classes[item.filename] or not os.path.isfile(srcFile):
                 classes[item.filename] = sha1
-                changedClasses.append(item.filename)
+                extractClasses.add(mainClass)
             
                 with open(outfilename, 'wb') as f:
                     f.write(classdata)
 
-if len(changedClasses) == 0:
-    print('nothing has changed!')
+if len(extractClasses) > 0:
+    print('extracted ' + str(len(extractClasses)) + ' classes')
+else:
+    print('no classes to extract, everything already up to date!')
+    writeData()
     exit(0)
 
 # decompile
+sources = data['sources']
+srcPrefixLength = len(javaOutput) + 1
+
 print('decompiling ...', flush=True)
-totalStr = str(len(changedClasses))
+totalStr = str(len(extractClasses))
 num = 0
 
-for filename in changedClasses:
+for filename in extractClasses:
     num += 1
 
     basename = os.path.basename(filename)
@@ -95,20 +131,26 @@ for filename in changedClasses:
         continue
 
     classfilename = classesOutput + '/' + filename
-    srcdir = os.path.dirname(javaOutput + '/' + filename)
+    srcfilename = javaOutput + '/' + getSourceFilePath(filename)
+    srcdir = os.path.dirname(srcfilename)
     os.makedirs(srcdir, exist_ok=True)
     
     # build a filename pattern that will include all potential inner classes of the class
     classpattern = classfilename[:-6] + '*.class' # replace .class by *.class
     cmdline = 'java -jar ' + setup.fernflower_jar + ' -rsy=1 ' + classpattern + ' ' + srcdir
-    p = subprocess.run(args=[cmdline], shell=True, capture_output=True)
+    p = subprocess.run(args=[cmdline], shell=True, capture_output=(not args.verbose))
     
-    if p.returncode == 0:
-        print('\t(' + str(num) + '/' + totalStr + ') ' + classfilename, flush=True)
-    else:
-        print('\t(' + str(num) + '/' + totalStr + ') ' + classfilename + ' [FAILED]', flush=True)
+    if p.returncode == 0 and os.path.isfile(srcfilename):
+        with open(srcfilename, 'rb') as f:
+            sha1 = hashlib.sha1(f.read()).hexdigest()
 
-# write class hashes
-print('writing hashes ...', flush=True)
-with open(hashesFilename, 'w') as f:
-    json.dump(classes, f)
+        sources[srcfilename[srcPrefixLength:]] = sha1
+        print('\t(' + str(num) + '/' + totalStr + ') ' + srcfilename, flush=True)
+    else:
+        print('\t(' + str(num) + '/' + totalStr + ') ' + srcfilename + ' [FAILED]', flush=True)
+
+# write data
+writeData()
+
+# done
+print('done')

@@ -6,7 +6,7 @@ import subprocess
 git_bin  = 'git'
 java_bin = 'java'
 
-cwd = os.getcwd()
+cwd = os.path.dirname(os.path.realpath(__file__))
 
 mcdlsnapshot_bin = cwd + '/tools/MinecraftSnapshotServerDownloader/mcdlsnapshot.py'
 mcremapper_root  = cwd + '/tools/MC-Remapper'
@@ -15,7 +15,7 @@ fernflower_root  = cwd + '/tools/fernflower'
 fernflower_jar   = fernflower_root + '/build/libs/fernflower.jar'
 
 # initialize git submodules
-p = subprocess.run(args=[git_bin, 'submodule', 'update', '--init'])
+p = subprocess.run(args=[git_bin, 'submodule', 'update', '--init'], cwd=cwd)
 if p.returncode != 0:
     print('failed to initialize submodules')
     exit(1)
