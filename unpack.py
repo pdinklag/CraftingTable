@@ -5,9 +5,7 @@ import hashlib
 import json
 import os
 import subprocess
-
-from zipfile import ZipFile
-from zipfile import ZIP_DEFLATED
+import zipfile
 
 # setup
 import setup
@@ -18,6 +16,9 @@ parser.add_argument('server', help='the original server jar')
 parser.add_argument('mapping', help='the corresponding obfuscation map')
 parser.add_argument('output', help='the output directory')
 parser.add_argument('--verbose', action='store_true', help='verbose error messages')
+parser.add_argument('--force-remap', action='store_true', help='force remapping')
+parser.add_argument('--force-decompile', action='store_true', help='force decompilation')
+parser.add_argument('--force-rehash', action='store_true', help='force re-hashing of source files')
 args = parser.parse_args()
 
 # checks
@@ -54,7 +55,7 @@ with open(args.server, 'rb') as f:
 
 # remap
 remapFilename = args.output + '/' + args.server[:-3] + 'remap.jar'
-if serverHash != data['serverHash']:
+if args.force_remap or serverHash != data['serverHash']:
     print('Remapping ...', flush=True)
     p = subprocess.run(args=[setup.mcremapper_bin, '--autotoken', '--output', remapFilename,  args.server, args.mapping])
     
@@ -67,18 +68,7 @@ if serverHash != data['serverHash']:
 # extract classes
 javaOutput = args.output + '/src'
 
-def getMainClassFilePath(classfilename):
-    dollar = classfilename.find('$')
-    if dollar >= 0:
-        return classfilename[0:dollar] + '.class'
-    else:
-        return classfilename
-
-def getSourceFilePath(classfilename):
-    return classfilename[:-5] + 'java'
-
 classes = data['classes']
-extractClasses = set()
 
 extractPrefix = 'net/minecraft'
 extractSuffix = '.class'
@@ -86,8 +76,10 @@ extractSuffix = '.class'
 classesOutput = args.output + '/classes'
 
 print('extracting ...', flush=True)
+numChanged = 0
+
 # TODO: also check for classes that may have been removed
-with ZipFile(remapFilename, 'r') as jar:
+with zipfile.ZipFile(remapFilename, 'r') as jar:
     data['jarComment'] = jar.comment.decode('utf-8')
 
     for item in jar.infolist():
@@ -98,56 +90,36 @@ with ZipFile(remapFilename, 'r') as jar:
             classdata = jar.read(item.filename)
             sha1 = hashlib.sha1(classdata).hexdigest()
             
-            mainClass = getMainClassFilePath(item.filename)
-            srcFile = javaOutput + '/' + getSourceFilePath(mainClass)
-            if not item.filename in classes or sha1 != classes[item.filename] or not os.path.isfile(srcFile):
+            if not item.filename in classes or sha1 != classes[item.filename]:
+                numChanged += 1
                 classes[item.filename] = sha1
-                extractClasses.add(mainClass)
             
                 with open(outfilename, 'wb') as f:
                     f.write(classdata)
 
-if len(extractClasses) > 0:
-    print('extracted ' + str(len(extractClasses)) + ' classes')
+if args.force_decompile or numChanged > 0:
+    print(str(numChanged) + ' classes have changed')
+
+    # decompile
+    print('decompiling ...', flush=True)
+    os.makedirs(javaOutput, exist_ok=True)
+    p = subprocess.run(args=['java', '-jar', setup.fernflower_jar, '-dgs=1', '-rsy=1', '-ind=    ', classesOutput, javaOutput], capture_output=not args.verbose)
+    
 else:
-    print('no classes to extract, everything already up to date!')
-    writeData()
-    exit(0)
+    print('everything up to date!')
 
-# decompile
-sources = data['sources']
-srcPrefixLength = len(javaOutput) + 1
+# compute source file hashes
+if args.force_decompile or args.force_rehash or numChanged > 0:
+    sources = data['sources']
+    javaPrefixLength = len(javaOutput) + 1
 
-print('decompiling ...', flush=True)
-totalStr = str(len(extractClasses))
-num = 0
-
-for filename in extractClasses:
-    num += 1
-
-    basename = os.path.basename(filename)
-    if basename.find('$') >= 0:
-        # skip inner classes
-        continue
-
-    classfilename = classesOutput + '/' + filename
-    srcfilename = javaOutput + '/' + getSourceFilePath(filename)
-    srcdir = os.path.dirname(srcfilename)
-    os.makedirs(srcdir, exist_ok=True)
-    
-    # build a filename pattern that will include all potential inner classes of the class
-    classpattern = classfilename[:-6] + '*.class' # replace .class by *.class
-    cmdline = 'java -jar ' + setup.fernflower_jar + ' -dgs=1 -rsy=1 ' + classpattern + ' ' + srcdir
-    p = subprocess.run(args=[cmdline], shell=True, capture_output=(not args.verbose))
-    
-    if p.returncode == 0 and os.path.isfile(srcfilename):
-        with open(srcfilename, 'rb') as f:
-            sha1 = hashlib.sha1(f.read()).hexdigest()
-
-        sources[srcfilename[srcPrefixLength:]] = sha1
-        print('\t(' + str(num) + '/' + totalStr + ') ' + srcfilename, flush=True)
-    else:
-        print('\t(' + str(num) + '/' + totalStr + ') ' + srcfilename + ' [FAILED]', flush=True)
+    for root, _, files in os.walk(javaOutput):
+        for name in files:
+            srcfilename = os.path.join(root, name)
+            with open(srcfilename, 'rb') as f:
+                srchash = hashlib.sha1(f.read()).hexdigest()
+            
+            sources[srcfilename[javaPrefixLength:]] = srchash
 
 # write data
 writeData()
