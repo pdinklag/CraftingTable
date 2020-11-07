@@ -37,7 +37,6 @@ for src, srcHash in data['sources'].items():
             sha1 = hashlib.sha1(f.read()).hexdigest()
 
         if sha1 != srcHash:
-            print(filename)
             modified.append(filename)
     else:
         print('source file ' + filename + ' does not exist')
