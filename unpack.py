@@ -56,7 +56,7 @@ with open(args.server, 'rb') as f:
 remapFilename = args.output + '/' + args.server[:-3] + 'remap.jar'
 if serverHash != data['serverHash']:
     print('Remapping ...', flush=True)
-    p = subprocess.run(args=[setup.mcremapper_bin, args.server, args.mapping, '--output', remapFilename, '--fixlocalvar', 'rename', '--autotoken'])
+    p = subprocess.run(args=[setup.mcremapper_bin, '--autotoken', '--output', remapFilename,  args.server, args.mapping])
     
     if not p.returncode == 0:
         exit(1)
@@ -137,7 +137,7 @@ for filename in extractClasses:
     
     # build a filename pattern that will include all potential inner classes of the class
     classpattern = classfilename[:-6] + '*.class' # replace .class by *.class
-    cmdline = 'java -jar ' + setup.fernflower_jar + ' -rsy=1 ' + classpattern + ' ' + srcdir
+    cmdline = 'java -jar ' + setup.fernflower_jar + ' -dgs=1 -rsy=1 ' + classpattern + ' ' + srcdir
     p = subprocess.run(args=[cmdline], shell=True, capture_output=(not args.verbose))
     
     if p.returncode == 0 and os.path.isfile(srcfilename):
