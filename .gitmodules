@@ -1,6 +1,6 @@
-[submodule "tools/fernflower"]
-	path = tools/fernflower
-	url = https://github.com/pdinklag/fernflower.git
 [submodule "tools/MC-Remapper"]
 	path = tools/MC-Remapper
-	url = https://github.com/pdinklag/MC-Remapper
+	url = https://github.com/HeartPattern/MC-Remapper
+[submodule "tools/fernflower"]
+	path = tools/fernflower
+	url = https://github.com/fesh0r/fernflower
