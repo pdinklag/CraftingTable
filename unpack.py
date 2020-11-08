@@ -70,8 +70,8 @@ javaOutput = args.output + '/src'
 
 classes = data['classes']
 
-extractPrefix = 'net/minecraft'
-extractSuffix = '.class'
+classFileExt = '.class'
+javaFileExt = '.java'
 
 classesOutput = args.output + '/classes'
 
@@ -83,22 +83,29 @@ with zipfile.ZipFile(remapFilename, 'r') as jar:
     data['jarComment'] = jar.comment.decode('utf-8')
 
     for item in jar.infolist():
-        if item.filename.startswith(extractPrefix) and item.filename.endswith(extractSuffix):
-            outfilename = classesOutput + '/' + item.filename
+        filename = item.filename
+        if filename.endswith(classFileExt) and (filename.startswith('net/minecraft') or filename.startswith('com/mojang')):
+            outfilename = classesOutput + '/' + filename
             os.makedirs(os.path.dirname(outfilename), exist_ok=True)
             
-            classdata = jar.read(item.filename)
+            classdata = jar.read(filename)
             sha1 = hashlib.sha1(classdata).hexdigest()
             
-            if not item.filename in classes or sha1 != classes[item.filename]:
+            if not filename in classes or sha1 != classes[filename]:
                 numChanged += 1
-                classes[item.filename] = sha1
+                classes[filename] = sha1
             
                 with open(outfilename, 'wb') as f:
                     f.write(classdata)
 
 if args.force_decompile or numChanged > 0:
     print(str(numChanged) + ' classes have changed')
+
+    # clear all .java files in source path
+    for root, _, files in os.walk(javaOutput):
+        for name in files:
+            if name.endswith(javaFileExt):
+                os.remove(os.path.join(root, name))
 
     # decompile
     print('decompiling ...', flush=True)
@@ -110,16 +117,18 @@ else:
 
 # compute source file hashes
 if args.force_decompile or args.force_rehash or numChanged > 0:
+    data['sources'] = dict()
     sources = data['sources']
     javaPrefixLength = len(javaOutput) + 1
 
     for root, _, files in os.walk(javaOutput):
         for name in files:
-            srcfilename = os.path.join(root, name)
-            with open(srcfilename, 'rb') as f:
-                srchash = hashlib.sha1(f.read()).hexdigest()
-            
-            sources[srcfilename[javaPrefixLength:]] = srchash
+            if name.endswith(javaFileExt):
+                srcfilename = os.path.join(root, name)
+                with open(srcfilename, 'rb') as f:
+                    srchash = hashlib.sha1(f.read()).hexdigest()
+                
+                sources[srcfilename[javaPrefixLength:]] = srchash
 
 # write data
 writeData()

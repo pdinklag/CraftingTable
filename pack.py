@@ -46,10 +46,17 @@ if len(modified) == 0:
     exit(0)
 
 # recompile modified
-# TODO: first clear all class files in recompile path!
 recompilePath = dataPath + '/recompile'
 os.makedirs(recompilePath, exist_ok=True)
 
+# clear all .class files in recompile path
+classFileExt = '.class'
+for root, _, files in os.walk(recompilePath):
+    for name in files:
+        if name.endswith(classFileExt):
+            os.remove(os.path.join(root, name))
+
+# compile
 print('Compiling ' + str(len(modified)) + ' source files ...')
 p = subprocess.run(args=['javac','-source','1.8','-target','1.8','-cp',args.remappedServer,'-d',recompilePath] + modified)
 
