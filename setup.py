@@ -8,7 +8,6 @@ java_bin = 'java'
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 
-mcdlsnapshot_bin = os.path.join(cwd, 'tools', 'MinecraftSnapshotServerDownloader', 'mcdlsnapshot.py')
 mcremapper_root  = os.path.join(cwd, 'tools', 'MC-Remapper')
 mcremapper_bin   = os.path.join(mcremapper_root, 'build', 'install', 'MC-Remapper', 'bin', 'MC-Remapper')
 fernflower_root  = os.path.join(cwd, 'tools', 'fernflower')

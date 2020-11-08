@@ -4,6 +4,3 @@
 [submodule "tools/MC-Remapper"]
 	path = tools/MC-Remapper
 	url = https://github.com/pdinklag/MC-Remapper
-[submodule "tools/MinecraftSnapshotServerDownloader"]
-	path = tools/MinecraftSnapshotServerDownloader
-	url = https://github.com/pdinklag/MinecraftSnapshotServerDownloader
