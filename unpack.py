@@ -29,7 +29,7 @@ if not os.path.isfile(args.mapping):
     print('obfuscation map not found: ' + args.mapping)
 
 # load previous data
-dataFilename = args.output + '/' + args.server[:-3] + 'data.json'
+dataFilename = os.path.join(args.output, args.server[:-3] + 'data.json')
 
 if os.path.isfile(dataFilename):
     with open(dataFilename, 'r') as f:
@@ -54,7 +54,7 @@ with open(args.server, 'rb') as f:
     serverHash = hashlib.sha1(f.read()).hexdigest()
 
 # remap
-remapFilename = args.output + '/' + args.server[:-3] + 'remap.jar'
+remapFilename = os.path.join(args.output, args.server[:-3] + 'remap.jar')
 if args.force_remap or serverHash != data['serverHash']:
     print('Remapping ...', flush=True)
     p = subprocess.run(args=[setup.mcremapper_bin, '--autotoken', '--output', remapFilename,  args.server, args.mapping])
@@ -66,14 +66,13 @@ if args.force_remap or serverHash != data['serverHash']:
     writeData()
 
 # extract classes
-javaOutput = args.output + '/src'
+javaOutput = os.path.join(args.output, 'src')
+classesOutput = os.path.join(args.output, 'classes')
 
 classes = data['classes']
 
 classFileExt = '.class'
 javaFileExt = '.java'
-
-classesOutput = args.output + '/classes'
 
 print('extracting ...', flush=True)
 numChanged = 0
@@ -85,7 +84,7 @@ with zipfile.ZipFile(remapFilename, 'r') as jar:
     for item in jar.infolist():
         filename = item.filename
         if filename.endswith(classFileExt) and (filename.startswith('net/minecraft') or filename.startswith('com/mojang')):
-            outfilename = classesOutput + '/' + filename
+            outfilename = os.path.join(classesOutput, filename)
             os.makedirs(os.path.dirname(outfilename), exist_ok=True)
             
             classdata = jar.read(filename)

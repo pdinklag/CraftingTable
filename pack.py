@@ -27,11 +27,11 @@ with open(args.data, 'r') as f:
     data = json.load(f)
 
 # check source files for modifications
-srcPath = dataPath + '/src'
+srcPath = os.path.join(dataPath, 'src')
 
 modified = []
 for src, srcHash in data['sources'].items():
-    filename = srcPath + '/' + src
+    filename = os.path.join(srcPath, src)
     if os.path.isfile(filename):
         with open(filename, 'rb') as f:
             sha1 = hashlib.sha1(f.read()).hexdigest()
@@ -46,7 +46,7 @@ if len(modified) == 0:
     exit(0)
 
 # recompile modified
-recompilePath = dataPath + '/recompile'
+recompilePath = os.path.join(dataPath, 'recompile')
 os.makedirs(recompilePath, exist_ok=True)
 
 # clear all .class files in recompile path
@@ -77,7 +77,7 @@ with zipfile.ZipFile(args.remappedServer, 'r') as server:
         for item in server.infolist():
             filename = item.filename
             
-            recompiled = recompilePath + '/' + filename
+            recompiled = os.path.join(recompilePath, filename)
             if os.path.isfile(recompiled):
                 with open(recompiled, 'rb') as f:
                     filedata = f.read()
