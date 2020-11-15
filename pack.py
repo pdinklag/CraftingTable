@@ -27,19 +27,25 @@ with open(args.data, 'r') as f:
     data = json.load(f)
 
 # check source files for modifications
+javaFileExt = '.java'
 srcPath = os.path.join(dataPath, 'src')
+srcPathLen = len(srcPath)
+sources = data['sources']
 
-modified = []
-for src, srcHash in data['sources'].items():
-    filename = os.path.join(srcPath, src)
-    if os.path.isfile(filename):
-        with open(filename, 'rb') as f:
-            sha1 = hashlib.sha1(f.read()).hexdigest()
+modified = list()
+for root, _, files in os.walk(srcPath):
+    for name in files:
+        if name.endswith(javaFileExt):
+            filename = os.path.join(root, name)
+            src = filename[srcPathLen+1:]
+            if src in sources:
+                with open(filename, 'rb') as f:
+                    sha1 = hashlib.sha1(f.read()).hexdigest()
 
-        if sha1 != srcHash:
-            modified.append(filename)
-    else:
-        print('source file ' + filename + ' does not exist')
+                if sha1 != sources[src]:
+                    modified.append(filename)
+            else:
+                modified.append(filename)
 
 if len(modified) == 0:
     print('no source files have been modified!')
@@ -63,8 +69,14 @@ p = subprocess.run(args=['javac','-source','1.8','-target','1.8','-cp',args.rema
 if not p.returncode == 0:
     exit(1)
 
+# list recompiled files
+pack = set()
+for root, _, files in os.walk(recompilePath):
+    for name in files:
+        if name.endswith(classFileExt):
+            pack.add(os.path.join(root, name))
+
 # repack
-# TODO: also pack new files that are not contained in the original server
 repackedServer = args.remappedServer[:-3] + 'repack.jar'
 print('Repacking into ' + repackedServer + ' ...')
 
@@ -79,11 +91,20 @@ with zipfile.ZipFile(args.remappedServer, 'r') as server:
             
             recompiled = os.path.join(recompilePath, filename)
             if os.path.isfile(recompiled):
+                pack.remove(recompiled)
                 with open(recompiled, 'rb') as f:
                     filedata = f.read()
             else:
                 filedata = server.read(filename)
 
             repack.writestr(item, filedata)
+        
+        # add remaining class files
+        for remaining in pack:
+            with open(remaining, 'rb') as f:
+                filedata = f.read()
+
+            filename = remaining[len(recompilePath)+1:]
+            repack.writestr(filename, filedata)
 
 print('done')
