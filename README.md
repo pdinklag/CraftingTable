@@ -88,3 +88,19 @@ When `i` was an `Integer` in the original source code, we have an ambiguity prob
 The code produced by the decompiler will always use the index variant, because the boxing typecast to `Integer` is *not* being decompiled if it was there. It recompiles just fine, because `remove(int)` does work. However, the semantics are wrong, and the cast to `Integer` has to be manually restored.
 
 There is no way to detect this other than the server probably crashing seemingly at random, which may not be easy to reproduce. To avoid it, have a very close look at all usages of `remove` if you spot an `Integer` list.
+
+### Explicit Constructor Calls
+
+Sometimes, for whatever reason, constructors are called explicitly. You may encounter something like this in a decomplied source:
+
+```java	
+A var = new A;
+A.<init>(arg1, arg2);
+```
+
+Of course, that's not valid Java. Since `<init>` is just the internal name of a constructors, something like the above must be manually replaced by:
+
+```java
+A var = new A(arg1, arg2);
+```
+
