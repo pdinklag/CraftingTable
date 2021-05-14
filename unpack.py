@@ -57,7 +57,7 @@ with open(args.server, 'rb') as f:
 remapFilename = os.path.join(args.output, args.server[:-3] + 'remap.jar')
 if args.force_remap or serverHash != data['serverHash']:
     print('Remapping ...', flush=True)
-    p = subprocess.run(args=[setup.mcremapper_bin, '--autotoken', '--output', remapFilename,  args.server, args.mapping])
+    p = subprocess.run(args=[setup.mcremapper_bin, '--autotoken', '--output-name', remapFilename,  args.server, args.mapping])
     
     if not p.returncode == 0:
         exit(1)

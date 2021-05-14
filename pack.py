@@ -64,7 +64,7 @@ for root, _, files in os.walk(recompilePath):
 
 # compile
 print('Compiling ' + str(len(modified)) + ' source files ...')
-p = subprocess.run(args=['javac','-source','1.8','-target','1.8','-cp',args.remappedServer,'-d',recompilePath] + modified)
+p = subprocess.run(args=['javac','-source','16','-target','16','-cp',args.remappedServer,'-d',recompilePath] + modified)
 
 if not p.returncode == 0:
     exit(1)
